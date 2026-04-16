@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
@@ -29,6 +29,17 @@ const Home: NextPage = () => {
 
   // Local state
   const [cvSignature, setCvSignature] = useState<string | null>(null);
+
+  // Hydrate CV signature from localStorage when wallet connects/changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!connectedAddress) {
+      setCvSignature(null);
+      return;
+    }
+    const stored = window.localStorage.getItem(`cvSignature:${connectedAddress.toLowerCase()}`);
+    setCvSignature(stored);
+  }, [connectedAddress]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -51,16 +62,20 @@ const Home: NextPage = () => {
   // Get or request CV spend signature
   const getSignature = useCallback(async (): Promise<string | null> => {
     if (cvSignature) return cvSignature;
+    if (!connectedAddress) return null;
 
     try {
       const sig = await signMessageAsync({ message: "larv.ai CV Spend" });
       setCvSignature(sig);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`cvSignature:${connectedAddress.toLowerCase()}`, sig);
+      }
       return sig;
     } catch {
       setError("Signature rejected. You must sign the message to proceed.");
       return null;
     }
-  }, [cvSignature, signMessageAsync]);
+  }, [cvSignature, connectedAddress, signMessageAsync]);
 
   // Generate PFP
   const handleGenerate = useCallback(

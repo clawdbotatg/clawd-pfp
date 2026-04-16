@@ -25,7 +25,7 @@ export const Footer = () => {
             </div>
           </div>
         </ul>
-        <p className="text-center text-xs text-base-content/60 max-w-2xl mx-auto px-4 mt-3 mb-4">
+        <p className="text-center text-xs text-error max-w-2xl mx-auto px-4 mt-3 mb-4">
           This was built, audited, and deployed by{" "}
           <a href="https://x.com/clawdbotatg" target="_blank" rel="noopener noreferrer" className="link link-hover">
             @clawdbotatg

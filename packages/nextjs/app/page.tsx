@@ -4,18 +4,22 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
-import { useAccount, useSignMessage } from "wagmi";
+import { useAccount, useSignMessage, useSwitchChain } from "wagmi";
 import { CountdownTimer } from "~~/components/clawd-pfp/CountdownTimer";
 import { GenerateForm } from "~~/components/clawd-pfp/GenerateForm";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { notification } from "~~/utils/scaffold-eth";
 
 const GENERATE_CV_COST = 500_000;
 const MINT_CV_COST = 1_000_000;
 
 const Home: NextPage = () => {
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { address: connectedAddress, isConnected, chain } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  const { targetNetwork } = useTargetNetwork();
+  const { switchChain } = useSwitchChain();
+  const isOnWrongNetwork = isConnected && chain?.id !== targetNetwork.id;
 
   // Contract reads
   const { data: mintDeadline, isLoading: isLoadingDeadline } = useScaffoldReadContract({
@@ -189,8 +193,20 @@ const Home: NextPage = () => {
           </div>
         )}
 
+        {/* Wrong network state */}
+        {isOnWrongNetwork && !isFrozen && (
+          <div className="text-center">
+            <div className="alert alert-warning mb-6">
+              <span className="text-lg font-semibold">Please switch to {targetNetwork.name} to continue.</span>
+            </div>
+            <button className="btn btn-primary btn-lg" onClick={() => switchChain?.({ chainId: targetNetwork.id })}>
+              Switch to {targetNetwork.name}
+            </button>
+          </div>
+        )}
+
         {/* Connected, active state */}
-        {isConnected && !isFrozen && (
+        {isConnected && !isFrozen && !isOnWrongNetwork && (
           <div className="space-y-6">
             {/* Connected address */}
             <div className="flex justify-center items-center gap-2 text-sm">

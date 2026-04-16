@@ -17,7 +17,6 @@ const Gallery: NextPage = () => {
   const { data: mintEvents, isLoading: isLoadingEvents } = useScaffoldEventHistory({
     contractName: "ClawdPFP",
     eventName: "PFPMinted",
-    fromBlock: 0n,
     watch: true,
   });
 

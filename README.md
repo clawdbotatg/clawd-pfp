@@ -2,6 +2,14 @@
 
 Generate custom AI-powered CLAWD lobster PFPs and mint them as permanent ERC-721 NFTs on Ethereum mainnet. Users pay in CV tokens; the server wallet sponsors every mint's gas, so end users never hold ETH.
 
+## Features
+
+- Connect wallet, sign a one-time CV-spend message, and generate AI PFPs with a custom prompt.
+- **Surprise Me** button on the generate form composes a random Mad-Libs-style prompt (adjective + subject + setting + style) so you never have to stare at a blank textarea.
+- Gasless mint: the server relayer pays gas and calls `mint()`; users only need CV tokens, never ETH.
+- Gallery view of every minted PFP, sourced from the contract's `PFPMinted` events.
+- Immutable, deadline-bound contract -- after `mintDeadline`, minting is permanently frozen.
+
 ## Live URLs
 
 - **Frontend:** <https://bafybeihdb3xry4xr3zs575zybnciu7sjv5bdyu6n333xuyklozbwq7z3xa.ipfs.community.bgipfs.com/>

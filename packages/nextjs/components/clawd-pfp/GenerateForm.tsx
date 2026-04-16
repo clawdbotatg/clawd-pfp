@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getRandomSurprisePrompt } from "~~/lib/surpriseMePrompts";
 
 type GenerateFormProps = {
   onGenerate: (prompt: string) => Promise<void>;
@@ -20,8 +21,14 @@ export const GenerateForm = ({ onGenerate, isGenerating, disabled, disabledReaso
     await onGenerate(prompt.trim());
   };
 
+  const handleSurpriseMe = () => {
+    if (isGenerating || disabled) return;
+    setPrompt(getRandomSurprisePrompt(MAX_PROMPT_LENGTH));
+  };
+
   const charsRemaining = MAX_PROMPT_LENGTH - prompt.length;
   const isOverLimit = charsRemaining < 0;
+  const controlsDisabled = isGenerating || !!disabled;
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-lg mx-auto">
@@ -37,7 +44,17 @@ export const GenerateForm = ({ onGenerate, isGenerating, disabled, disabledReaso
           maxLength={MAX_PROMPT_LENGTH}
           disabled={isGenerating}
         />
-        <label className="label">
+        <label className="label flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs normal-case gap-1"
+            onClick={handleSurpriseMe}
+            disabled={controlsDisabled}
+            title="Fill the prompt with a random idea"
+          >
+            <span aria-hidden="true">🎲</span>
+            Surprise Me
+          </button>
           <span className={`label-text-alt ${isOverLimit ? "text-error" : "text-base-content/60"}`}>
             {charsRemaining} characters remaining
           </span>

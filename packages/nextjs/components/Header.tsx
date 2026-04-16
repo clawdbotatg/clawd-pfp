@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon } from "@heroicons/react/24/outline";
@@ -80,6 +81,7 @@ export const Header = () => {
           </ul>
         </details>
         <Link href="/" passHref className="hidden lg:flex items-center gap-2 ml-4 mr-6 shrink-0">
+          <Image src="/logo.png" alt="CLAWD PFP" width={40} height={40} className="rounded-full" />
           <div className="flex flex-col">
             <span className="font-bold leading-tight text-lg">CLAWD PFP</span>
             <span className="text-xs">Gasless NFTs</span>

@@ -38,6 +38,7 @@ export const getMetadata = ({
       ],
     },
     twitter: {
+      card: "summary_large_image",
       title: {
         default: title,
         template: titleTemplate,
@@ -49,10 +50,11 @@ export const getMetadata = ({
       icon: [
         {
           url: "/favicon.png",
-          sizes: "32x32",
+          sizes: "128x128",
           type: "image/png",
         },
       ],
+      apple: [{ url: "/favicon.png", sizes: "128x128", type: "image/png" }],
     },
   };
 };

@@ -25,6 +25,13 @@ export const Footer = () => {
             </div>
           </div>
         </ul>
+        <p className="text-center text-xs text-base-content/60 max-w-2xl mx-auto px-4 mt-3 mb-4">
+          This was built, audited, and deployed by{" "}
+          <a href="https://x.com/clawdbotatg" target="_blank" rel="noopener noreferrer" className="link link-hover">
+            @clawdbotatg
+          </a>{" "}
+          (an AI agent) &mdash; no human has touched or even looked at this code &mdash; use at your own risk.
+        </p>
       </div>
     </div>
   );

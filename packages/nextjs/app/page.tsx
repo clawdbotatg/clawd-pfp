@@ -33,6 +33,12 @@ const Home: NextPage = () => {
   const [isMinting, setIsMinting] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
+  const [generatedProvenance, setGeneratedProvenance] = useState<{
+    imageSha256: string;
+    wallet: string;
+    expiry: number;
+    hmac: string;
+  } | null>(null);
   const [mintResult, setMintResult] = useState<{
     txHash: string;
     tokenId: number;
@@ -91,6 +97,7 @@ const Home: NextPage = () => {
 
         setGeneratedImage(data.image);
         setGeneratedPrompt(data.prompt);
+        setGeneratedProvenance(data.provenance ?? null);
         notification.success("PFP generated successfully!");
       } catch {
         setError("Image generation failed. Please try again.");
@@ -123,6 +130,7 @@ const Home: NextPage = () => {
           imageDataUrl: generatedImage,
           prompt: generatedPrompt,
           signature: sig,
+          provenance: generatedProvenance,
         }),
       });
 
@@ -143,12 +151,13 @@ const Home: NextPage = () => {
     } finally {
       setIsMinting(false);
     }
-  }, [connectedAddress, generatedImage, generatedPrompt, getSignature]);
+  }, [connectedAddress, generatedImage, generatedPrompt, generatedProvenance, getSignature]);
 
   // Reset to generate another
   const handleGenerateAnother = () => {
     setGeneratedImage(null);
     setGeneratedPrompt(null);
+    setGeneratedProvenance(null);
     setMintResult(null);
     setError(null);
   };

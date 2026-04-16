@@ -14,7 +14,9 @@ import {
   getWalletClient,
   parseImageDataUrl,
   parseTokenIdFromReceiptLogs,
+  sha256ImageBase64,
   spendCv,
+  verifyImageProvenance,
 } from "~~/lib/server/pfpApi";
 
 export const runtime = "nodejs";
@@ -53,8 +55,14 @@ export async function POST(request: NextRequest) {
       imageDataUrl?: string;
       prompt?: string;
       signature?: string;
+      provenance?: {
+        imageSha256?: unknown;
+        wallet?: unknown;
+        expiry?: unknown;
+        hmac?: unknown;
+      };
     };
-    const { wallet, imageDataUrl, prompt, signature } = body;
+    const { wallet, imageDataUrl, prompt, signature, provenance } = body;
 
     // --- Validate ---
     if (!wallet || !isAddress(wallet)) {
@@ -170,6 +178,45 @@ export async function POST(request: NextRequest) {
       })) as bigint;
     } catch {
       predictedTokenId = null;
+    }
+
+    // --- Verify image provenance BEFORE charging CV. ---
+    // The image must have come from our /api/generate for this wallet within
+    // the last 10 minutes — otherwise an attacker could submit any image and
+    // we'd charge CV + mint it on-chain.
+    if (
+      !provenance ||
+      typeof provenance !== "object" ||
+      typeof provenance.imageSha256 !== "string" ||
+      typeof provenance.wallet !== "string" ||
+      typeof provenance.expiry !== "number" ||
+      typeof provenance.hmac !== "string"
+    ) {
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: "missing provenance" }, { status: 400 });
+    }
+    if (provenance.wallet.toLowerCase() !== wallet.toLowerCase()) {
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: "provenance wallet mismatch" }, { status: 400 });
+    }
+    if (provenance.expiry <= Math.floor(Date.now() / 1000)) {
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: "provenance expired" }, { status: 400 });
+    }
+    const incomingImageSha = sha256ImageBase64(imageDataUrl);
+    if (incomingImageSha !== provenance.imageSha256) {
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: "image does not match provenance" }, { status: 400 });
+    }
+    const verify = verifyImageProvenance({
+      imageBase64: imageDataUrl,
+      wallet: provenance.wallet,
+      expiry: provenance.expiry,
+      hmac: provenance.hmac,
+    });
+    if (!verify.ok) {
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: "invalid provenance signature" }, { status: 400 });
     }
 
     // --- Charge CV FIRST (user-facing failures here mean no IPFS/tx cost) ---

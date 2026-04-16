@@ -7,6 +7,7 @@ import {
   generatePfp,
   getCvBalance,
   getPublicClient,
+  signImageProvenance,
 } from "~~/lib/server/pfpApi";
 
 export const runtime = "nodejs";
@@ -132,11 +133,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sign the returned image so /api/mint can verify it actually came from
+    // this route (and was generated for this wallet) before spending CV.
+    let provenance;
+    try {
+      provenance = signImageProvenance({ imageBase64: result.image, wallet });
+    } catch (err) {
+      console.error("signImageProvenance failed:", err);
+      return NextResponse.json({ error: "Image provenance signing failed" }, { status: 500 });
+    }
+
     return NextResponse.json({
       image: result.image,
       prompt: result.prompt,
       cvSpent: result.cvSpent,
       newBalance: result.newBalance,
+      provenance,
     });
   } catch (error) {
     console.error("Generate API error:", error);

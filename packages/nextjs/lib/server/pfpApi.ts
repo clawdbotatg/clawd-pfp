@@ -7,6 +7,7 @@
 // BGIPFS_TOKEN, and RELAYER_PRIVATE_KEY — do NOT import it from a
 // "use client" file. The sibling /app/api/*/route.ts handlers are the only
 // intended callers.
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { type Address, type Hex, createPublicClient, createWalletClient, decodeEventLog, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
@@ -297,6 +298,93 @@ export const CLAWDPFP_ABI = [
     anonymous: false,
   },
 ] as const;
+
+// -------------------- Image provenance (HMAC) --------------------
+
+export const IMAGE_PROVENANCE_TTL_SEC = 10 * 60; // 10 minutes
+
+export type ImageProvenance = {
+  imageSha256: string;
+  wallet: string;
+  expiry: number;
+  hmac: string;
+};
+
+function getImageProvenanceSecret(): string {
+  const secret = process.env.IMAGE_PROVENANCE_SECRET;
+  if (!secret) throw new Error("IMAGE_PROVENANCE_SECRET is not set");
+  return secret;
+}
+
+/**
+ * Hashes the raw image bytes (the base64 payload of a `data:image/...` URL,
+ * decoded) with SHA-256 and returns the hex digest. Hashing the bytes — not
+ * the data-URL string — avoids false mismatches from whitespace / MIME
+ * variations between generate and mint. Accepts either a bare base64 string
+ * or a full `data:image/...;base64,<payload>` URL.
+ */
+export function sha256ImageBase64(imageBase64OrDataUrl: string): string {
+  const comma = imageBase64OrDataUrl.indexOf(",");
+  const base64 =
+    imageBase64OrDataUrl.startsWith("data:") && comma >= 0
+      ? imageBase64OrDataUrl.slice(comma + 1)
+      : imageBase64OrDataUrl;
+  const bytes = Buffer.from(base64, "base64");
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function provenanceMessage(imageSha256Hex: string, wallet: string, expiry: number): string {
+  return `${imageSha256Hex}.${wallet.toLowerCase()}.${expiry}`;
+}
+
+/**
+ * Signs a short-lived HMAC over (image-hash, wallet, expiry) so that /api/mint
+ * can verify an image was actually produced by /api/generate for that wallet.
+ */
+export function signImageProvenance(params: { imageBase64: string; wallet: string }): ImageProvenance {
+  const secret = getImageProvenanceSecret();
+  const imageSha256 = sha256ImageBase64(params.imageBase64);
+  const wallet = params.wallet.toLowerCase();
+  const expiry = Math.floor(Date.now() / 1000) + IMAGE_PROVENANCE_TTL_SEC;
+  const hmac = createHmac("sha256", secret)
+    .update(provenanceMessage(imageSha256, wallet, expiry))
+    .digest("hex");
+  return { imageSha256, wallet, expiry, hmac };
+}
+
+export type ImageProvenanceVerifyResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Verifies a provenance token returned from signImageProvenance. Caller must
+ * still separately compare the claimed `wallet` to the request's wallet and
+ * the claimed `imageSha256` to a hash of the incoming image — see the
+ * ordered checks in /app/api/mint/route.ts.
+ */
+export function verifyImageProvenance(params: {
+  imageBase64: string;
+  wallet: string;
+  expiry: number;
+  hmac: string;
+}): ImageProvenanceVerifyResult {
+  const secret = getImageProvenanceSecret();
+  const imageSha256 = sha256ImageBase64(params.imageBase64);
+  const expected = createHmac("sha256", secret)
+    .update(provenanceMessage(imageSha256, params.wallet.toLowerCase(), params.expiry))
+    .digest();
+  let provided: Buffer;
+  try {
+    provided = Buffer.from(params.hmac, "hex");
+  } catch {
+    return { ok: false, error: "invalid provenance signature" };
+  }
+  if (provided.length !== expected.length) {
+    return { ok: false, error: "invalid provenance signature" };
+  }
+  if (!timingSafeEqual(provided, expected)) {
+    return { ok: false, error: "invalid provenance signature" };
+  }
+  return { ok: true };
+}
 
 // -------------------- Misc --------------------
 

@@ -26,8 +26,8 @@ contract ClawdPFP is ERC721 {
     /// @notice Emitted when a new PFP is minted
     /// @param tokenId The newly minted token's ID
     /// @param to The recipient address
-    /// @param prompt The prompt used to generate this PFP (stored in event logs for gallery display)
-    event PFPMinted(uint256 indexed tokenId, address indexed to, string prompt);
+    /// @param tokenURI The IPFS metadata URI for this token
+    event PFPMinted(uint256 indexed tokenId, address indexed to, string tokenURI);
 
     /// @notice Reverts when a non-minter address tries to call mint()
     error OnlyMinter();
@@ -38,11 +38,19 @@ contract ClawdPFP is ERC721 {
     /// @notice Reverts when tokenURI is queried for a nonexistent token
     error TokenDoesNotExist();
 
+    /// @notice Reverts when the minter address is address(0)
+    error ZeroAddress();
+
+    /// @notice Reverts when the mint duration is zero
+    error DurationTooShort();
+
     /**
      * @param _minter The server wallet address authorized to call mint()
      * @param _mintDuration How many seconds from deployment until minting closes (e.g., 604800 for 7 days)
      */
     constructor(address _minter, uint256 _mintDuration) ERC721("CLAWD PFP", "CPFP") {
+        if (_minter == address(0)) revert ZeroAddress();
+        if (_mintDuration == 0) revert DurationTooShort();
         minter = _minter;
         mintDeadline = block.timestamp + _mintDuration;
     }
@@ -60,8 +68,8 @@ contract ClawdPFP is ERC721 {
         uint256 tokenId = _tokenIdCounter;
         _tokenIdCounter = tokenId + 1;
 
-        _safeMint(to, tokenId);
         _tokenURIs[tokenId] = _tokenURI;
+        _safeMint(to, tokenId);
 
         emit PFPMinted(tokenId, to, _tokenURI);
     }

@@ -10,7 +10,7 @@ contract ClawdPFPTest is Test {
     address public user;
     uint256 public constant MINT_DURATION = 604800; // 7 days
 
-    event PFPMinted(uint256 indexed tokenId, address indexed to, string prompt);
+    event PFPMinted(uint256 indexed tokenId, address indexed to, string tokenURI);
 
     function setUp() public {
         minter = vm.addr(1);
@@ -109,5 +109,15 @@ contract ClawdPFPTest is Test {
         vm.stopPrank();
 
         assertEq(pfp.balanceOf(user), 3);
+    }
+
+    function testConstructorRevertsOnZeroMinter() public {
+        vm.expectRevert(ClawdPFP.ZeroAddress.selector);
+        new ClawdPFP(address(0), MINT_DURATION);
+    }
+
+    function testConstructorRevertsOnZeroDuration() public {
+        vm.expectRevert(ClawdPFP.DurationTooShort.selector);
+        new ClawdPFP(minter, 0);
     }
 }

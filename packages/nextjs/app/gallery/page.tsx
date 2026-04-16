@@ -76,9 +76,9 @@ const Gallery: NextPage = () => {
             {mintEvents?.map(event => {
               const tokenId = Number(event.args.tokenId);
               const to = event.args.to as string;
-              const prompt = event.args.tokenURI as string;
+              const tokenUri = event.args.tokenURI as string;
 
-              return <PFPCard key={tokenId} tokenId={tokenId} owner={to} prompt={prompt} />;
+              return <PFPCard key={tokenId} tokenId={tokenId} owner={to} tokenUri={tokenUri} />;
             })}
           </div>
         )}

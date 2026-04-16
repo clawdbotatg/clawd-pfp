@@ -22,6 +22,10 @@ export const menuLinks: HeaderMenuLink[] = [
     label: "Gallery",
     href: "/gallery",
   },
+  {
+    label: "Debug",
+    href: "/debug",
+  },
 ];
 
 export const HeaderMenuLinks = () => {

@@ -49,9 +49,17 @@ const Generate: NextPage = () => {
       setMintStage(0);
       return;
     }
-    const t1 = setTimeout(() => setMintStage(1), 2500);
-    const t2 = setTimeout(() => setMintStage(2), 9000);
-    const t3 = setTimeout(() => setMintStage(3), 18000);
+    // Timers reflect the real /api/mint flow:
+    //   ~0-2s   preflight + CV charge     -> Charging CV
+    //   ~2-7s   two BGIPFS pins + sim     -> Pinning to IPFS
+    //   ~7-9s   tx submission             -> Minting on Ethereum
+    //   ~9-20s  waitForTransactionReceipt -> Confirming
+    // The receipt wait is the longest step (~12s on mainnet), so advancing to
+    // Confirming at 9s lines up with when we're actually waiting on block
+    // inclusion rather than lingering on an earlier label.
+    const t1 = setTimeout(() => setMintStage(1), 2000);
+    const t2 = setTimeout(() => setMintStage(2), 7000);
+    const t3 = setTimeout(() => setMintStage(3), 9000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);

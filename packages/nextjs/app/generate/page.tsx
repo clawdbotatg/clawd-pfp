@@ -168,6 +168,11 @@ const Generate: NextPage = () => {
         return;
       }
 
+      // Force the UI through the final "Confirming" stage for a moment so
+      // users actually see it before the success card replaces the progress list.
+      setMintStage(3);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       setMintResult({
         txHash: data.txHash,
         tokenId: data.tokenId,

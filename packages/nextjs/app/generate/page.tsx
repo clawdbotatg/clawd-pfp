@@ -59,7 +59,7 @@ const Generate: NextPage = () => {
     // inclusion rather than lingering on an earlier label.
     const t1 = setTimeout(() => setMintStage(1), 2000);
     const t2 = setTimeout(() => setMintStage(2), 6000);
-    const t3 = setTimeout(() => setMintStage(3), 14000);
+    const t3 = setTimeout(() => setMintStage(3), 11000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);

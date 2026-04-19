@@ -13,12 +13,12 @@ import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 
 export const PFP_API_URL = "https://leftclaw.services/api/pfp/generate-cv";
+export const PFP_COST_URL = "https://leftclaw.services/api/pfp/cost";
 export const LARV_BALANCE_URL = "https://larv.ai/api/cv/balance";
 export const LARV_SPEND_URL = "https://larv.ai/api/cv/spend";
 export const BGIPFS_ADD_URL = "https://upload.bgipfs.com/api/v0/add?cid-version=1";
 export const BGIPFS_GATEWAY_TEMPLATE = "https://{cid}.ipfs.community.bgipfs.com/";
 
-export const GENERATE_CV_COST = 500_000;
 export const MINT_CV_COST = 5_000_000;
 export const MIN_RELAYER_ETH = parseEther("0.001");
 export const CLAWDPFP_ADDRESS: Address = "0xB5741B033c45330A34952436a34b1B25a208Af10";
@@ -49,6 +49,46 @@ export function getWalletClient() {
     chain: mainnet,
     transport: http(getAlchemyRpcUrl()),
   });
+}
+
+// -------------------- LeftClaw pricing --------------------
+
+// Upstream serves Cache-Control: public, max-age=30. We mirror that here so
+// bursts of requests on the same lambda instance don't each make an external
+// round-trip, while still letting the price update within ~30s.
+const COST_CACHE_TTL_MS = 30_000;
+let cachedCost: { value: number; fetchedAt: number } | null = null;
+
+export type PfpCostResponse = {
+  version: number;
+  generateCvCost: number;
+  cvDivisor?: number;
+  highestCVBalance?: number;
+  priceUsd?: number;
+  formula?: string;
+};
+
+/**
+ * Fetches the current LeftClaw generate-CV cost. Throws on non-200 or on a
+ * malformed payload — callers should treat failure as "pricing unavailable"
+ * rather than silently falling back to a stale constant.
+ */
+export async function fetchGenerateCvCost(): Promise<number> {
+  const now = Date.now();
+  if (cachedCost && now - cachedCost.fetchedAt < COST_CACHE_TTL_MS) {
+    return cachedCost.value;
+  }
+  const res = await fetch(PFP_COST_URL, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`PFP cost endpoint returned HTTP ${res.status}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as Partial<PfpCostResponse>;
+  const cost = typeof data.generateCvCost === "number" ? data.generateCvCost : NaN;
+  if (!Number.isFinite(cost) || cost <= 0) {
+    throw new Error("PFP cost endpoint returned invalid generateCvCost");
+  }
+  cachedCost = { value: cost, fetchedAt: now };
+  return cost;
 }
 
 // -------------------- larv.ai CV --------------------
@@ -133,7 +173,7 @@ export type PfpGenerateResult =
       ok: true;
       image: string; // data:image/png;base64,...
       prompt: string;
-      cvSpent: number;
+      cvSpent?: number;
       newBalance?: number | string;
     }
   | {
@@ -184,7 +224,7 @@ export async function generatePfp(params: {
     ok: true,
     image,
     prompt: (data.prompt as string) || params.prompt,
-    cvSpent: (data.cvSpent as number) || GENERATE_CV_COST,
+    cvSpent: typeof data.cvSpent === "number" ? (data.cvSpent as number) : undefined,
     newBalance: data.newBalance as number | string | undefined,
   };
 }

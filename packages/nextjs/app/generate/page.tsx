@@ -12,8 +12,8 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { notification } from "~~/utils/scaffold-eth";
 
-const GENERATE_CV_COST = 500_000;
 const MINT_CV_COST = 5_000_000;
+const PFP_COST_URL = "https://leftclaw.services/api/pfp/cost";
 
 // Keep the last generated (but not yet minted) PFP in localStorage keyed by
 // wallet, so navigating away and back doesn't lose it. Expiry is enforced by
@@ -34,6 +34,29 @@ const Generate: NextPage = () => {
   });
 
   const [cvSignature, setCvSignature] = useState<string | null>(null);
+  const [generateCvCost, setGenerateCvCost] = useState<number | null>(null);
+
+  // Fetch current generate price from LeftClaw. CORS is open and upstream
+  // is edge-cached (max-age=30), so a direct browser fetch is cheap and the
+  // price stays in sync with the server-side preflight without a passthrough.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(PFP_COST_URL);
+        if (!res.ok) return;
+        const data = (await res.json()) as { generateCvCost?: number };
+        if (!cancelled && typeof data.generateCvCost === "number") {
+          setGenerateCvCost(data.generateCvCost);
+        }
+      } catch {
+        // Leave null — UI renders a "…" fallback rather than a stale number.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -340,7 +363,8 @@ const Generate: NextPage = () => {
               <RainbowKitCustomConnectButton />
             </div>
             <div className="text-sm text-base-content/50">
-              Generate: {GENERATE_CV_COST.toLocaleString()} CV · Mint: {MINT_CV_COST.toLocaleString()} CV
+              Generate: {generateCvCost !== null ? generateCvCost.toLocaleString() : "…"} CV · Mint:{" "}
+              {MINT_CV_COST.toLocaleString()} CV
             </div>
           </div>
         )}
@@ -366,7 +390,8 @@ const Generate: NextPage = () => {
             </div>
 
             <div className="text-center text-sm text-base-content/60">
-              Generate: {GENERATE_CV_COST.toLocaleString()} CV | Mint: {MINT_CV_COST.toLocaleString()} CV
+              Generate: {generateCvCost !== null ? generateCvCost.toLocaleString() : "…"} CV | Mint:{" "}
+              {MINT_CV_COST.toLocaleString()} CV
             </div>
 
             {error && (
@@ -451,7 +476,12 @@ const Generate: NextPage = () => {
                   Spend&quot;) that authorizes CV to be charged from your larv.ai balance. It&apos;s free, uses no gas,
                   and never sends funds from your wallet.
                 </div>
-                <GenerateForm onGenerate={handleGenerate} isGenerating={isGenerating} disabled={false} />
+                <GenerateForm
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  disabled={false}
+                  generateCvCost={generateCvCost}
+                />
               </>
             )}
 
@@ -477,7 +507,7 @@ const Generate: NextPage = () => {
                     )}
                   </button>
                   <button className="btn btn-outline btn-sm" onClick={handleGenerateAnother} disabled={isMinting}>
-                    Generate Again ({GENERATE_CV_COST.toLocaleString()} CV)
+                    Generate Again ({generateCvCost !== null ? generateCvCost.toLocaleString() : "…"} CV)
                   </button>
                   {!isMinting && !cvSignature && (
                     <p className="text-xs text-base-content/60">

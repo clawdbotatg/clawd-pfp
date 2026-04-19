@@ -8,13 +8,20 @@ type GenerateFormProps = {
   isGenerating: boolean;
   disabled?: boolean;
   disabledReason?: string;
+  generateCvCost: number | null;
 };
 
 const MAX_PROMPT_LENGTH = 280;
 
 const GENERATE_ETA_MS = 30_000;
 
-export const GenerateForm = ({ onGenerate, isGenerating, disabled, disabledReason }: GenerateFormProps) => {
+export const GenerateForm = ({
+  onGenerate,
+  isGenerating,
+  disabled,
+  disabledReason,
+  generateCvCost,
+}: GenerateFormProps) => {
   const [prompt, setPrompt] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
 
@@ -91,7 +98,7 @@ export const GenerateForm = ({ onGenerate, isGenerating, disabled, disabledReaso
             Generating your CLAWD...
           </>
         ) : (
-          "Generate PFP (500,000 CV)"
+          `Generate PFP (${generateCvCost !== null ? generateCvCost.toLocaleString() : "…"} CV)`
         )}
       </button>
 

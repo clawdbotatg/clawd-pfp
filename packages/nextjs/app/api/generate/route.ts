@@ -4,7 +4,7 @@ import { isAddress } from "viem";
 import {
   CLAWDPFP_ABI,
   CLAWDPFP_ADDRESS,
-  GENERATE_CV_COST,
+  fetchGenerateCvCost,
   generatePfp,
   getCvBalance,
   getPublicClient,
@@ -118,15 +118,26 @@ export async function POST(request: NextRequest) {
       // and the mint path independently re-checks the deadline.
     }
 
-    // --- Preflight: CV balance ---
+    // --- Preflight: current price + CV balance ---
+    let generateCvCost: number;
+    try {
+      generateCvCost = await fetchGenerateCvCost();
+    } catch (err) {
+      genLog(reqId, wallet, "reject", { reason: "cost_unavailable", msg: (err as Error).message });
+      return NextResponse.json(
+        { error: "PFP pricing is temporarily unavailable. Please try again in a moment." },
+        { status: 503 },
+      );
+    }
+
     const balance = await getCvBalance(wallet);
-    if (balance.balance < GENERATE_CV_COST) {
-      genLog(reqId, wallet, "reject", { reason: "insufficient_cv", have: balance.balance, need: GENERATE_CV_COST });
+    if (balance.balance < generateCvCost) {
+      genLog(reqId, wallet, "reject", { reason: "insufficient_cv", have: balance.balance, need: generateCvCost });
       return NextResponse.json(
         {
-          error: `Insufficient CV. Need ${GENERATE_CV_COST.toLocaleString()} CV, have ${balance.balance.toLocaleString()}.`,
+          error: `Insufficient CV. Need ${generateCvCost.toLocaleString()} CV, have ${balance.balance.toLocaleString()}.`,
           currentBalance: balance.balance,
-          required: GENERATE_CV_COST,
+          required: generateCvCost,
         },
         { status: 402 },
       );

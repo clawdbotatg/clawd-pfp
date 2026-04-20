@@ -1,13 +1,21 @@
+import { notFound } from "next/navigation";
 import { DebugContracts } from "./_components/DebugContracts";
 import type { NextPage } from "next";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
-export const metadata = getMetadata({
-  title: "Debug Contracts",
-  description: "Debug your deployed 🏗 Scaffold-ETH 2 contracts in an easy way",
-});
+export const metadata = {
+  ...getMetadata({
+    title: "Debug Contracts",
+    description: "Debug your deployed 🏗 Scaffold-ETH 2 contracts in an easy way",
+  }),
+  robots: { index: false, follow: false },
+};
 
 const Debug: NextPage = () => {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <>
       <DebugContracts />

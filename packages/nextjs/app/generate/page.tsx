@@ -324,15 +324,11 @@ const Generate: NextPage = () => {
             Create a custom CLAWD lobster PFP and mint it as a gasless NFT on Ethereum.
           </p>
           <p className="text-sm text-base-content/60 max-w-md mx-auto mt-3">
-            Powered by the{" "}
-            <a href="https://leftclaw.services" target="_blank" rel="noopener noreferrer" className="link link-hover">
-              leftclaw.services
-            </a>{" "}
-            pipeline. Minting uses CV earned from staking{" "}
+            Minting costs CV earned from staking{" "}
             <a href="https://larv.ai" target="_blank" rel="noopener noreferrer" className="link link-hover">
               $CLAWD on larv.ai
             </a>
-            .
+            . The relayer pays gas, so you never send ETH from your wallet.
           </p>
         </div>
 

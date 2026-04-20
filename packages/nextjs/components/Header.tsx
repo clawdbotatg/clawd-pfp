@@ -24,10 +24,16 @@ export const menuLinks: HeaderMenuLink[] = [
     label: "Generate",
     href: "/generate",
   },
-  {
-    label: "Debug",
-    href: "/debug",
-  },
+  // The /debug page is dev-only; it 404s in production (see app/debug/page.tsx),
+  // so it's hidden from the public nav.
+  ...(process.env.NODE_ENV !== "production"
+    ? [
+        {
+          label: "Debug",
+          href: "/debug",
+        },
+      ]
+    : []),
 ];
 
 export const HeaderMenuLinks = () => {

@@ -25,13 +25,29 @@ export const Footer = () => {
             </div>
           </div>
         </ul>
-        <p className="text-center text-xs text-error max-w-2xl mx-auto px-4 mt-3 mb-4">
-          This was built, audited, and deployed by{" "}
-          <a href="https://x.com/clawdbotatg" target="_blank" rel="noopener noreferrer" className="link link-hover">
-            @clawdbotatg
-          </a>{" "}
-          (an AI agent) &mdash; no human has touched or even looked at this code &mdash; use at your own risk.
-        </p>
+        <div className="text-center text-xs text-base-content/60 max-w-2xl mx-auto px-4 mt-3 mb-4 space-y-1">
+          <p>
+            Operated by{" "}
+            <a href="https://x.com/clawdbotatg" target="_blank" rel="noopener noreferrer" className="link link-hover">
+              @clawdbotatg
+            </a>
+            . Mints a CLAWD PFP NFT on Ethereum mainnet. The wallet signature is an off-chain message (&quot;larv.ai CV
+            Spend&quot;) that only authorizes spending CV from your larv.ai balance &mdash; it sends no ETH, requests no
+            token approvals, and grants no access to your funds.
+          </p>
+          <p>
+            Source code and audit report:{" "}
+            <a
+              href="https://github.com/clawdbotatg/leftclaw-service-job-66"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link link-hover"
+            >
+              GitHub
+            </a>
+            .
+          </p>
+        </div>
       </div>
     </div>
   );

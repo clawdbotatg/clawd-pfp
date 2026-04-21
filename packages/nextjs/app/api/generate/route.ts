@@ -9,7 +9,6 @@ import {
   getCvBalance,
   getPublicClient,
   signImageProvenance,
-  verifyCvSpendSignature,
 } from "~~/lib/server/pfpApi";
 
 function genLog(reqId: string, wallet: string, stage: string, extra: Record<string, unknown> = {}) {
@@ -144,23 +143,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 402 },
       );
-    }
-
-    // --- Verify signature (EOA ecrecover + ERC-1271 on Base) ---
-    // Matches upstream's verification chain: anything accepted here will be
-    // accepted by leftclaw.services. Failing fast prevents a round-trip for
-    // smart-wallet sigs that couldn't verify. On Base RPC hiccup we log and
-    // proceed — upstream will do its own check, and blocking a possibly-
-    // valid sig on our RPC trouble would be a worse UX.
-    const sigCheck = await verifyCvSpendSignature({ wallet, signature });
-    if (!sigCheck.ok && sigCheck.reason === "invalid") {
-      genLog(reqId, wallet, "reject", { reason: "bad_signature", err: sigCheck.error, sigLen: signature.length });
-      const entry = rateLimitMap.get(wallet.toLowerCase());
-      if (entry && entry.count > 0) entry.count -= 1;
-      return NextResponse.json({ error: sigCheck.error, code: "bad_signature" }, { status: 403 });
-    }
-    if (!sigCheck.ok) {
-      genLog(reqId, wallet, "warn_sig_verify_rpc_error", { err: sigCheck.error });
     }
 
     // --- Forward to LeftClaw PFP API ---

@@ -17,7 +17,6 @@ import {
   parseTokenIdFromReceiptLogs,
   sha256ImageBase64,
   spendCv,
-  verifyCvSpendSignature,
   verifyImageProvenance,
 } from "~~/lib/server/pfpApi";
 
@@ -259,31 +258,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "invalid provenance signature" }, { status: 400 });
     }
 
-    // --- Verify signature (EOA ecrecover + ERC-1271 on Base) BEFORE CV charge ---
-    // larv.ai verifies the same way, so a local pass is a strong indicator
-    // upstream will accept. A local "invalid" lets us wipe the client cache
-    // with `bad_signature` before burning an upstream CV-spend attempt. A
-    // transient Base RPC error is logged but doesn't block — upstream will
-    // do its own verification and is the authoritative check.
-    const sigCheck = await verifyCvSpendSignature({ wallet, signature });
-    if (!sigCheck.ok && sigCheck.reason === "invalid") {
-      mintLog(reqId, wallet, "reject", { reason: "bad_signature", err: sigCheck.error, sigLen: signature.length });
-      decrementRateLimit(wallet);
-      return NextResponse.json({ error: sigCheck.error, code: "bad_signature" }, { status: 403 });
-    }
-    if (!sigCheck.ok) {
-      mintLog(reqId, wallet, "warn_sig_verify_rpc_error", { err: sigCheck.error });
-    }
-
     // --- Charge CV FIRST (user-facing failures here mean no IPFS/tx cost) ---
+    // We intentionally DO NOT pre-verify the signature ourselves. ERC-1271
+    // smart wallets (Coinbase Smart Wallet, many Safe configs) mix chain_id
+    // into their signing domain, so a sig produced while the dapp is on
+    // mainnet will only verify on mainnet, while a sig produced on Base
+    // only verifies on Base. We can't reliably know which chain the user's
+    // wallet is bound to, so we let larv.ai be the authority and surface
+    // their sig-error verbatim with code: bad_signature below.
     mintLog(reqId, wallet, "charging_cv", { elapsedMs: Date.now() - t0 });
     const charge = await spendCv({ wallet, amount: MINT_CV_COST, signature });
     if (!charge.ok) {
-      // Flag signature-related errors explicitly so the frontend can clear the
-      // stale cached signature and prompt the user to re-sign. Smart-wallet
-      // (ERC-1271) sigs are now pre-verified above, so this branch mostly
-      // catches server-side hiccups or wallet state changes between sign and
-      // charge.
+      // Flag signature-related errors explicitly so the frontend can clear
+      // the stale cached signature and prompt the user to re-sign.
       const errText = charge.error || "unknown";
       const isSigError = /signature|invalid.*sig|sig.*invalid|sig.*length/i.test(errText);
       mintLog(reqId, wallet, "cv_charge_failed", {

@@ -5,7 +5,7 @@ Generate custom AI-powered CLAWD lobster PFPs and mint them as permanent ERC-721
 ## Features
 
 - Connect wallet, sign a one-time CV-spend message, and generate AI PFPs with a custom prompt.
-- **Smart wallet support.** Works with EOAs (MetaMask, Rabby, …) and ERC-1271 smart contract wallets (Coinbase Smart Wallet, Safe, …) — signatures are verified via `publicClient.verifyMessage` on Base, matching upstream larv.ai / leftclaw.services.
+- **Smart wallet support.** Works with EOAs (MetaMask, Rabby, …) and ERC-1271 smart contract wallets (Coinbase Smart Wallet, Safe, …). Signature verification is delegated to upstream larv.ai / leftclaw.services, which verify on-chain via `publicClient.verifyMessage` — so any wallet that works for larv.ai CV spend works here.
 - **Surprise Me** button on the generate form composes a random Mad-Libs-style prompt (adjective + subject + setting + style) so you never have to stare at a blank textarea.
 - Gasless mint: the server relayer pays gas and calls `mint()`; users only need CV tokens, never ETH.
 - Gallery view of every minted PFP, sourced from the contract's `PFPMinted` events.

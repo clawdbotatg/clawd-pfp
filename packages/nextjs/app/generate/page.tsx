@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
+import { base } from "viem/chains";
 import { useAccount, useSignMessage, useSwitchChain } from "wagmi";
 import { CountdownTimer } from "~~/components/clawd-pfp/CountdownTimer";
 import { GenerateForm } from "~~/components/clawd-pfp/GenerateForm";
@@ -25,8 +26,7 @@ const Generate: NextPage = () => {
   const { address: connectedAddress, isConnected, chain } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { targetNetwork } = useTargetNetwork();
-  const { switchChain } = useSwitchChain();
-  const isOnWrongNetwork = isConnected && chain?.id !== targetNetwork.id;
+  const { switchChain, switchChainAsync } = useSwitchChain();
 
   const { data: mintDeadline, isLoading: isLoadingDeadline } = useScaffoldReadContract({
     contractName: "ClawdPFP",
@@ -70,6 +70,10 @@ const Generate: NextPage = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
+  // Hide the wrong-network screen while we're mid-flow — getSignature() hops
+  // to Base and back, and we don't want the UI to flash "switch to Ethereum"
+  // behind the wallet popups during that hop.
+  const isOnWrongNetwork = isConnected && chain?.id !== targetNetwork.id && !isGenerating && !isMinting;
   // Time-based estimate of where we are in the mint flow (0=Charging, 1=Pinning, 2=Minting, 3=Confirming)
   const [mintStage, setMintStage] = useState(0);
 
@@ -150,6 +154,24 @@ const Generate: NextPage = () => {
     if (cvSignature) return cvSignature;
     if (!connectedAddress) return null;
 
+    // Upstream (leftclaw.services + larv.ai) verify the CV-spend sig on Base.
+    // Coinbase Smart Wallet / Safe use replay-safe hashing that binds the sig
+    // to block.chainid, so a sig produced on mainnet won't verify on Base.
+    // Switch to Base for the sign, then restore the original chain so the
+    // rest of the mint UI (which lives on mainnet) keeps working.
+    const originalChainId = chain?.id;
+    let didSwitch = false;
+    if (originalChainId !== base.id) {
+      try {
+        await switchChainAsync({ chainId: base.id });
+        didSwitch = true;
+      } catch {
+        // User rejected or wallet can't switch — fall through and sign on
+        // the current chain. EOAs still work; smart-wallet sigs will be
+        // rejected upstream and the bad_signature path re-prompts.
+      }
+    }
+
     try {
       const sig = await signMessageAsync({ message: "larv.ai CV Spend" });
       setCvSignature(sig);
@@ -160,8 +182,16 @@ const Generate: NextPage = () => {
     } catch {
       setError("Signature rejected. You must sign the message to proceed.");
       return null;
+    } finally {
+      if (didSwitch && originalChainId && originalChainId !== base.id) {
+        try {
+          await switchChainAsync({ chainId: originalChainId });
+        } catch {
+          // Silent — user can switch manually if the wallet refuses.
+        }
+      }
     }
-  }, [cvSignature, connectedAddress, signMessageAsync]);
+  }, [cvSignature, connectedAddress, chain?.id, signMessageAsync, switchChainAsync]);
 
   // Drop a cached signature that the server flagged as invalid so the next
   // action re-prompts the wallet. The user sees a friendly nudge and retries.

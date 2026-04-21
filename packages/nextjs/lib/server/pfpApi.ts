@@ -10,7 +10,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { type Address, type Hex, createPublicClient, createWalletClient, decodeEventLog, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 
 export const PFP_API_URL = "https://leftclaw.services/api/pfp/generate-cv";
 export const PFP_COST_URL = "https://leftclaw.services/api/pfp/cost";
@@ -29,10 +29,27 @@ export function getAlchemyRpcUrl(): string {
   return `https://eth-mainnet.g.alchemy.com/v2/${key}`;
 }
 
+export function getBaseAlchemyRpcUrl(): string {
+  const key = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+  if (!key) throw new Error("NEXT_PUBLIC_ALCHEMY_API_KEY is not set");
+  return `https://base-mainnet.g.alchemy.com/v2/${key}`;
+}
+
 export function getPublicClient() {
   return createPublicClient({
     chain: mainnet,
     transport: http(getAlchemyRpcUrl()),
+  });
+}
+
+// Base public client used exclusively for ERC-1271 / ERC-6492 signature
+// verification. Upstream (leftclaw.services, larv.ai) verify the "larv.ai
+// CV Spend" signature on Base — Coinbase Smart Wallet and Safe are Base-
+// native — so we verify on the same chain to match upstream's result.
+export function getBasePublicClient() {
+  return createPublicClient({
+    chain: base,
+    transport: http(getBaseAlchemyRpcUrl()),
   });
 }
 
@@ -89,6 +106,48 @@ export async function fetchGenerateCvCost(): Promise<number> {
   }
   cachedCost = { value: cost, fetchedAt: now };
   return cost;
+}
+
+// -------------------- CV signature verification (EOA + ERC-1271) --------------------
+
+export const CV_SIGN_MESSAGE = "larv.ai CV Spend";
+
+export type CvSigVerifyResult =
+  | { ok: true }
+  | { ok: false; reason: "invalid"; error: string }
+  | { ok: false; reason: "rpc_error"; error: string };
+
+/**
+ * Verifies the user's signature over the "larv.ai CV Spend" message. Uses
+ * viem's `publicClient.verifyMessage` against Base, which handles both EOA
+ * (ecrecover) and smart contract wallets (ERC-1271 / ERC-6492) — so Coinbase
+ * Smart Wallet, Safe, and any 1271-compatible wallet work automatically.
+ *
+ * We mirror upstream's verification chain (Base) so that anything that passes
+ * here will pass at leftclaw.services and larv.ai, and vice versa. Runs before
+ * any CV is charged, giving smart-wallet users a clean reject instead of a
+ * mysterious upstream "invalid signature" after forwarding.
+ *
+ * Differentiates "invalid" (signature actually bad — wipe client cache) from
+ * "rpc_error" (Base RPC hiccup — the caller should typically let upstream be
+ * the source of truth rather than blocking a possibly-valid sig).
+ */
+export async function verifyCvSpendSignature(params: {
+  wallet: string;
+  signature: string;
+}): Promise<CvSigVerifyResult> {
+  try {
+    const client = getBasePublicClient();
+    const valid = await client.verifyMessage({
+      address: params.wallet as `0x${string}`,
+      message: CV_SIGN_MESSAGE,
+      signature: params.signature as `0x${string}`,
+    });
+    if (!valid) return { ok: false, reason: "invalid", error: "Signature did not verify for this wallet" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: "rpc_error", error: (err as Error).message };
+  }
 }
 
 // -------------------- larv.ai CV --------------------

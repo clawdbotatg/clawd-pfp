@@ -203,7 +203,7 @@ const Generate: NextPage = () => {
           if (data.code === "bad_signature") {
             clearSignatureCache();
             setError(
-              `${data.error || "Your signature was rejected."} Your wallet will be asked to sign again on the next try. (If you're using a smart contract wallet like Safe, minting may not work.)`,
+              `${data.error || "Your signature was rejected."} Your wallet will be asked to sign again on the next try.`,
             );
           } else {
             setError(data.error || "Image generation failed. Please try again.");
@@ -276,7 +276,7 @@ const Generate: NextPage = () => {
         if (data.code === "bad_signature") {
           clearSignatureCache();
           setError(
-            `${data.error || "Your signature was rejected."} Your wallet will be asked to sign again on the next try. (If you're using a smart contract wallet like Safe, minting may not work.)`,
+            `${data.error || "Your signature was rejected."} Your wallet will be asked to sign again on the next try.`,
           );
           return;
         }

@@ -17,6 +17,7 @@ import {
   parseTokenIdFromReceiptLogs,
   sha256ImageBase64,
   spendCv,
+  verifyCvSpendSignature,
   verifyImageProvenance,
 } from "~~/lib/server/pfpApi";
 
@@ -98,13 +99,11 @@ export async function POST(request: NextRequest) {
       mintLog(reqId, wallet, "reject", { reason: "bad_signature_format", len: signature?.length });
       return NextResponse.json({ error: "Signature is required and must be hex" }, { status: 400 });
     }
-    // Non-standard sig lengths (smart contract wallets return ERC-1271 bytes, not
-    // 132-char ECDSA sigs). Log so we can tell contract-wallet users apart from
-    // truncation bugs. Standard ECDSA = 0x + 130 hex = 132 chars total.
-    if (signature.length !== 132) {
-      mintLog(reqId, wallet, "warn_nonstandard_sig", { sigLen: signature.length });
-    }
-    mintLog(reqId, wallet, "start", { promptLen: prompt.length, sigLen: signature.length });
+    // Standard ECDSA = 0x + 130 hex = 132 chars. Longer signatures are
+    // expected for ERC-1271 / ERC-6492 (smart contract wallets) and verified
+    // via publicClient.verifyMessage below rather than rejected on length.
+    const isEoaLengthSig = signature.length === 132;
+    mintLog(reqId, wallet, "start", { promptLen: prompt.length, sigLen: signature.length, isEoaLengthSig });
 
     const sanitizedPrompt = prompt.replace(/<[^>]*>/g, "").trim();
     if (sanitizedPrompt.length === 0) {
@@ -260,13 +259,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "invalid provenance signature" }, { status: 400 });
     }
 
+    // --- Verify signature (EOA ecrecover + ERC-1271 on Base) BEFORE CV charge ---
+    // larv.ai verifies the same way, so a local pass is a strong indicator
+    // upstream will accept. A local "invalid" lets us wipe the client cache
+    // with `bad_signature` before burning an upstream CV-spend attempt. A
+    // transient Base RPC error is logged but doesn't block — upstream will
+    // do its own verification and is the authoritative check.
+    const sigCheck = await verifyCvSpendSignature({ wallet, signature });
+    if (!sigCheck.ok && sigCheck.reason === "invalid") {
+      mintLog(reqId, wallet, "reject", { reason: "bad_signature", err: sigCheck.error, sigLen: signature.length });
+      decrementRateLimit(wallet);
+      return NextResponse.json({ error: sigCheck.error, code: "bad_signature" }, { status: 403 });
+    }
+    if (!sigCheck.ok) {
+      mintLog(reqId, wallet, "warn_sig_verify_rpc_error", { err: sigCheck.error });
+    }
+
     // --- Charge CV FIRST (user-facing failures here mean no IPFS/tx cost) ---
     mintLog(reqId, wallet, "charging_cv", { elapsedMs: Date.now() - t0 });
     const charge = await spendCv({ wallet, amount: MINT_CV_COST, signature });
     if (!charge.ok) {
       // Flag signature-related errors explicitly so the frontend can clear the
-      // stale cached signature and prompt the user to re-sign. This catches
-      // smart-contract-wallet (ERC-1271) sigs larv.ai rejects as "invalid length".
+      // stale cached signature and prompt the user to re-sign. Smart-wallet
+      // (ERC-1271) sigs are now pre-verified above, so this branch mostly
+      // catches server-side hiccups or wallet state changes between sign and
+      // charge.
       const errText = charge.error || "unknown";
       const isSigError = /signature|invalid.*sig|sig.*invalid|sig.*length/i.test(errText);
       mintLog(reqId, wallet, "cv_charge_failed", {

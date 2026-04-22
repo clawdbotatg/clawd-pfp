@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
 import { base } from "viem/chains";
-import { useAccount, useSignMessage, useSwitchChain } from "wagmi";
+import { useAccount, usePublicClient, useSignMessage, useSwitchChain } from "wagmi";
 import { CountdownTimer } from "~~/components/clawd-pfp/CountdownTimer";
 import { GenerateForm } from "~~/components/clawd-pfp/GenerateForm";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
@@ -27,6 +27,8 @@ const Generate: NextPage = () => {
   const { signMessageAsync } = useSignMessage();
   const { targetNetwork } = useTargetNetwork();
   const { switchChain, switchChainAsync } = useSwitchChain();
+  // Used to sniff smart-wallet deployment on Base via getCode (below).
+  const basePublicClient = usePublicClient({ chainId: base.id });
 
   const { data: mintDeadline, isLoading: isLoadingDeadline } = useScaffoldReadContract({
     contractName: "ClawdPFP",
@@ -35,6 +37,30 @@ const Generate: NextPage = () => {
 
   const [cvSignature, setCvSignature] = useState<string | null>(null);
   const [generateCvCost, setGenerateCvCost] = useState<number | null>(null);
+  // null = not yet checked, true = has code on Base (ERC-1271 smart wallet),
+  // false = EOA. Only smart wallets need the Base chain-hop for signing.
+  const [isSmartWallet, setIsSmartWallet] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!connectedAddress || !basePublicClient) {
+      setIsSmartWallet(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const code = await basePublicClient.getCode({ address: connectedAddress });
+        if (!cancelled) setIsSmartWallet(!!code && code !== "0x");
+      } catch {
+        // Leave as null on RPC hiccups — getSignature treats unknown as
+        // "try the safe path (switch to Base)" so smart wallets still work.
+        if (!cancelled) setIsSmartWallet(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectedAddress, basePublicClient]);
 
   // Fetch current generate price from LeftClaw. CORS is open and upstream
   // is edge-cached (max-age=30), so a direct browser fetch is cheap and the
@@ -155,20 +181,22 @@ const Generate: NextPage = () => {
     if (!connectedAddress) return null;
 
     // Upstream (leftclaw.services + larv.ai) verify the CV-spend sig on Base.
-    // Coinbase Smart Wallet / Safe use replay-safe hashing that binds the sig
-    // to block.chainid, so a sig produced on mainnet won't verify on Base.
-    // Switch to Base for the sign, then restore the original chain so the
-    // rest of the mint UI (which lives on mainnet) keeps working.
+    // ERC-1271 wallets (Coinbase Smart Wallet, Safe) use replay-safe hashing
+    // that binds the sig to block.chainid, so those MUST sign on Base.
+    // EOAs (MetaMask, Rabby, etc.) verify via ecrecover, which is chain-
+    // agnostic — forcing them to switch networks just confuses users and
+    // breaks the signing flow if they reject the switch prompt. Only hop
+    // chains when we've confirmed the account has code on Base.
+    const needsBase = isSmartWallet === true;
     const originalChainId = chain?.id;
     let didSwitch = false;
-    if (originalChainId !== base.id) {
+    if (needsBase && originalChainId !== base.id) {
       try {
         await switchChainAsync({ chainId: base.id });
         didSwitch = true;
       } catch {
-        // User rejected or wallet can't switch — fall through and sign on
-        // the current chain. EOAs still work; smart-wallet sigs will be
-        // rejected upstream and the bad_signature path re-prompts.
+        setError("Please approve the network switch to Base in your wallet, then try again.");
+        return null;
       }
     }
 
@@ -180,7 +208,9 @@ const Generate: NextPage = () => {
       }
       return sig;
     } catch {
-      setError("Signature rejected. You must sign the message to proceed.");
+      setError(
+        "Signature request failed. Open your wallet — if a prompt is waiting, approve or reject it, then try again.",
+      );
       return null;
     } finally {
       if (didSwitch && originalChainId && originalChainId !== base.id) {
@@ -191,7 +221,7 @@ const Generate: NextPage = () => {
         }
       }
     }
-  }, [cvSignature, connectedAddress, chain?.id, signMessageAsync, switchChainAsync]);
+  }, [cvSignature, connectedAddress, chain?.id, isSmartWallet, signMessageAsync, switchChainAsync]);
 
   // Drop a cached signature that the server flagged as invalid so the next
   // action re-prompts the wallet. The user sees a friendly nudge and retries.

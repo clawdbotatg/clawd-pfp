@@ -27,8 +27,38 @@ const pendingPfpKey = (addr: string) => `pendingPfp:${addr.toLowerCase()}`;
 // keys will be ignored on load and garbage-collected on the next sign.
 const cvSigKey = (addr: string) => `cvSig:v2:${addr.toLowerCase()}`;
 
+// Map wagmi / viem signMessage errors to user-actionable copy. The default
+// branch falls back to the wallet's own shortMessage if present, so we
+// surface real detail (e.g. "User rejected the request") instead of the
+// generic "Signature request failed" for every flavor of failure.
+function friendlySigError(err: unknown): string {
+  const e = err as { name?: string; code?: number | string; message?: string; shortMessage?: string };
+  const name = e?.name ?? "";
+  const code = e?.code;
+  const msg = (e?.shortMessage || e?.message || "").toLowerCase();
+
+  if (
+    name === "UserRejectedRequestError" ||
+    code === 4001 ||
+    msg.includes("user rejected") ||
+    msg.includes("user denied")
+  ) {
+    return "You rejected the signature request. Tap Generate again when you're ready.";
+  }
+  // MetaMask returns -32002 when another request is already pending in the
+  // extension for this origin — the new request fails without a popup.
+  if (name === "ResourceUnavailableRpcError" || code === -32002 || msg.includes("already pending")) {
+    return "Your wallet already has a pending request. Open your wallet extension, approve or reject the previous prompt, then try again.";
+  }
+  if (name === "ConnectorNotConnectedError" || msg.includes("not connected") || msg.includes("no connector")) {
+    return "Your wallet looks disconnected. Reconnect it and try again.";
+  }
+  const detail = e?.shortMessage || e?.message;
+  return `Signature request failed${detail ? `: ${detail}` : ""}. Open your wallet and try again.`;
+}
+
 const Generate: NextPage = () => {
-  const { address: connectedAddress, isConnected, chain } = useAccount();
+  const { address: connectedAddress, isConnected, chain, connector } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { targetNetwork } = useTargetNetwork();
   const { switchChain, switchChainAsync } = useSwitchChain();
@@ -216,18 +246,29 @@ const Generate: NextPage = () => {
       }
       return sig;
     } catch (err) {
-      // Log the raw error so bug reports have something actionable — the
-      // user-facing copy stays friendly but the console has the wagmi code.
-      console.error("[cv-sign] signMessageAsync failed:", err);
+      // Dump enough context that a screenshot of the console is diagnosable
+      // without us needing to go back and forth with the user. Safe to log
+      // — nothing here is a secret.
+      const wagmiErr = err as { name?: string; code?: number | string; message?: string; shortMessage?: string };
+      console.error("[cv-sign] signMessageAsync failed:", {
+        connector: connector ? { id: connector.id, name: connector.name, type: connector.type } : null,
+        chainId: chain?.id,
+        isSmartWallet,
+        error: {
+          name: wagmiErr?.name,
+          code: wagmiErr?.code,
+          message: wagmiErr?.message,
+          shortMessage: wagmiErr?.shortMessage,
+        },
+        raw: err,
+      });
       // Defensively wipe any cached sig so a retry starts from a clean slate
       // (covers racy states where a stale cache snuck past the load effect).
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(cvSigKey(connectedAddress));
       }
       setCvSignature(null);
-      setError(
-        "Signature request failed. Open your wallet — if a prompt is waiting, approve or reject it, then try again. If this keeps happening, disconnect and reconnect your wallet.",
-      );
+      setError(friendlySigError(err));
       return null;
     } finally {
       if (didSwitch && originalChainId && originalChainId !== base.id) {
@@ -238,7 +279,7 @@ const Generate: NextPage = () => {
         }
       }
     }
-  }, [cvSignature, connectedAddress, chain?.id, isSmartWallet, signMessageAsync, switchChainAsync]);
+  }, [cvSignature, connectedAddress, chain?.id, connector, isSmartWallet, signMessageAsync, switchChainAsync]);
 
   // Drop a cached signature that the server flagged as invalid so the next
   // action re-prompts the wallet. The user sees a friendly nudge and retries.

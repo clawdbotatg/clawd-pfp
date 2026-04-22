@@ -22,6 +22,11 @@ const PFP_COST_URL = "https://leftclaw.services/api/pfp/cost";
 // be minted anyway — we just drop them on load.
 const pendingPfpKey = (addr: string) => `pendingPfp:${addr.toLowerCase()}`;
 
+// Bump this suffix whenever the signing flow changes in a way that could
+// invalidate previously cached sigs (e.g. chain, message, encoding). Old
+// keys will be ignored on load and garbage-collected on the next sign.
+const cvSigKey = (addr: string) => `cvSig:v2:${addr.toLowerCase()}`;
+
 const Generate: NextPage = () => {
   const { address: connectedAddress, isConnected, chain } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -90,7 +95,10 @@ const Generate: NextPage = () => {
       setCvSignature(null);
       return;
     }
-    const stored = window.localStorage.getItem(`cvSignature:${connectedAddress.toLowerCase()}`);
+    // Opportunistically scrub the old (unversioned) key so stale sigs from
+    // prior deploys can't shadow the new flow.
+    window.localStorage.removeItem(`cvSignature:${connectedAddress.toLowerCase()}`);
+    const stored = window.localStorage.getItem(cvSigKey(connectedAddress));
     setCvSignature(stored);
   }, [connectedAddress]);
 
@@ -204,12 +212,21 @@ const Generate: NextPage = () => {
       const sig = await signMessageAsync({ message: "larv.ai CV Spend" });
       setCvSignature(sig);
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(`cvSignature:${connectedAddress.toLowerCase()}`, sig);
+        window.localStorage.setItem(cvSigKey(connectedAddress), sig);
       }
       return sig;
-    } catch {
+    } catch (err) {
+      // Log the raw error so bug reports have something actionable — the
+      // user-facing copy stays friendly but the console has the wagmi code.
+      console.error("[cv-sign] signMessageAsync failed:", err);
+      // Defensively wipe any cached sig so a retry starts from a clean slate
+      // (covers racy states where a stale cache snuck past the load effect).
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(cvSigKey(connectedAddress));
+      }
+      setCvSignature(null);
       setError(
-        "Signature request failed. Open your wallet — if a prompt is waiting, approve or reject it, then try again.",
+        "Signature request failed. Open your wallet — if a prompt is waiting, approve or reject it, then try again. If this keeps happening, disconnect and reconnect your wallet.",
       );
       return null;
     } finally {
@@ -227,7 +244,7 @@ const Generate: NextPage = () => {
   // action re-prompts the wallet. The user sees a friendly nudge and retries.
   const clearSignatureCache = useCallback(() => {
     if (typeof window !== "undefined" && connectedAddress) {
-      window.localStorage.removeItem(`cvSignature:${connectedAddress.toLowerCase()}`);
+      window.localStorage.removeItem(cvSigKey(connectedAddress));
     }
     setCvSignature(null);
   }, [connectedAddress]);

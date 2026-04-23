@@ -1,4 +1,4 @@
-# CLAWD PFP Generator
+# CLAWD PFP Generator 🦞
 
 Generate custom AI-powered CLAWD lobster PFPs and mint them as permanent ERC-721 NFTs on Ethereum mainnet. Users pay in CV tokens; the server wallet sponsors every mint's gas, so end users never hold ETH.
 

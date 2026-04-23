@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server";
-import { listAllPfps } from "~~/lib/server/pfpApi";
+import pfps from "~~/data/pfps.json";
 
 export const runtime = "nodejs";
-// Must be dynamic — a revalidate window causes `next build` to try to
-// pre-render this route at build time, which kicks off a full chain scan
-// + N × IPFS fetches and exceeds the 60s Vercel build timeout. Bot/edge
-// caching is still handled by the Cache-Control header below.
-export const dynamic = "force-dynamic";
+// The CLAWD PFP mint window is closed — the list is frozen forever, so
+// there's no reason to hit the chain on each request. Serve the static
+// snapshot and let the edge cache do the rest.
+export const dynamic = "force-static";
 
 export async function GET() {
-  try {
-    const entries = await listAllPfps();
-    return NextResponse.json(entries, {
-      headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-      },
-    });
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
-  }
+  return NextResponse.json(pfps, {
+    headers: {
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+    },
+  });
 }

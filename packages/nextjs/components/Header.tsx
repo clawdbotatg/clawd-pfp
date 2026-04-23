@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon } from "@heroicons/react/24/outline";
-import { CvBalance } from "~~/components/clawd-pfp/CvBalance";
-import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick } from "~~/hooks/scaffold-eth";
 
 type HeaderMenuLink = {
@@ -19,10 +17,6 @@ export const menuLinks: HeaderMenuLink[] = [
   {
     label: "Gallery",
     href: "/",
-  },
-  {
-    label: "Generate",
-    href: "/generate",
   },
   // The /debug page is dev-only; it 404s in production (see app/debug/page.tsx),
   // so it's hidden from the public nav.
@@ -91,16 +85,12 @@ export const Header = () => {
           <Image src="/logo.png" alt="CLAWD PFP" width={40} height={40} className="rounded-full" />
           <div className="flex flex-col">
             <span className="font-bold leading-tight text-lg">CLAWD PFP</span>
-            <span className="text-xs">Gasless NFTs</span>
+            <span className="text-xs">Gallery</span>
           </div>
         </Link>
         <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
           <HeaderMenuLinks />
         </ul>
-      </div>
-      <div className="navbar-end grow mr-4 gap-2">
-        <CvBalance />
-        <RainbowKitCustomConnectButton />
       </div>
     </div>
   );

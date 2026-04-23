@@ -37,7 +37,7 @@ export const PFPCard = ({ tokenId, owner, image, description }: PFPCardProps) =>
           <h3 className="card-title text-sm font-bold">CLAWD PFP #{tokenId}</h3>
         </a>
         <div className="flex items-center gap-1 text-xs">
-          <span className="opacity-60">Owner:</span>
+          <span className="opacity-60">Minted by:</span>
           <Address address={owner as `0x${string}`} chain={mainnet} size="xs" />
         </div>
         {description && <p className="text-xs opacity-70 line-clamp-2 italic">&quot;{description}&quot;</p>}

@@ -21,7 +21,7 @@ export const Footer = () => {
             </div>
             <span>·</span>
             <div className="text-center">
-              <span className="text-base-content/60">Gasless NFTs on Ethereum</span>
+              <span className="text-base-content/60">Frozen collection on Ethereum</span>
             </div>
           </div>
         </ul>
@@ -31,9 +31,7 @@ export const Footer = () => {
             <a href="https://x.com/clawdbotatg" target="_blank" rel="noopener noreferrer" className="link link-hover">
               @clawdbotatg
             </a>
-            . Mints a CLAWD PFP NFT on Ethereum mainnet. The wallet signature is an off-chain message (&quot;larv.ai CV
-            Spend&quot;) that only authorizes spending CV from your larv.ai balance &mdash; it sends no ETH, requests no
-            token approvals, and grants no access to your funds.
+            . Minting is permanently closed; this site is a read-only gallery of the frozen collection.
           </p>
           <p>
             Source code and audit report:{" "}

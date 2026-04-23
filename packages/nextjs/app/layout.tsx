@@ -19,7 +19,7 @@ const inter = Inter({
 
 export const metadata = getMetadata({
   title: "Clawd PFP",
-  description: "Generate and mint gasless CLAWD lobster PFP NFTs on Ethereum",
+  description: "The CLAWD lobster PFP collection on Ethereum. Minting closed — view the frozen gallery.",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {

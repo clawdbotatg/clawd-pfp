@@ -233,19 +233,12 @@ export async function generatePfp(params: {
 
 export type BgipfsUploadResult = { cid: string; size: number; name: string };
 
-/**
- * Uploads raw bytes to BGIPFS and returns a CIDv1 string. Uses the go-ipfs
- * compatible /api/v0/add endpoint with `cid-version=1` (required for the
- * subdomain gateway at community.bgipfs.com).
- */
-export async function bgipfsAddBytes(
+async function bgipfsAddBytesOnce(
   bytes: Uint8Array | Buffer,
   filename: string,
   contentType: string,
+  token: string,
 ): Promise<BgipfsUploadResult> {
-  const token = process.env.BGIPFS_TOKEN;
-  if (!token) throw new Error("BGIPFS_TOKEN not configured");
-
   const form = new FormData();
   // The go-ipfs /api/v0/add endpoint expects the field name `file`.
   form.append("file", new Blob([bytes], { type: contentType }), filename);
@@ -259,7 +252,11 @@ export async function bgipfsAddBytes(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`BGIPFS upload failed (HTTP ${res.status}): ${errText.slice(0, 200)}`);
+    const err = new Error(`BGIPFS upload failed (HTTP ${res.status}): ${errText.slice(0, 200)}`) as Error & {
+      status?: number;
+    };
+    err.status = res.status;
+    throw err;
   }
 
   // go-ipfs /api/v0/add can return NDJSON when uploading multiple files;
@@ -270,6 +267,41 @@ export async function bgipfsAddBytes(
   if (!parsed.Hash) throw new Error("BGIPFS upload did not return a CID");
   const size = typeof parsed.Size === "string" ? Number(parsed.Size) : (parsed.Size ?? 0);
   return { cid: parsed.Hash, size, name: parsed.Name || filename };
+}
+
+/**
+ * Uploads raw bytes to BGIPFS and returns a CIDv1 string. Uses the go-ipfs
+ * compatible /api/v0/add endpoint with `cid-version=1` (required for the
+ * subdomain gateway at community.bgipfs.com).
+ *
+ * Retries up to 3 times on transient failures (5xx responses or network
+ * errors) with short backoff, since a single blip here would burn the
+ * user's CV with no way to refund. 4xx errors are not retried — auth or
+ * bad-payload failures don't self-heal.
+ */
+export async function bgipfsAddBytes(
+  bytes: Uint8Array | Buffer,
+  filename: string,
+  contentType: string,
+): Promise<BgipfsUploadResult> {
+  const token = process.env.BGIPFS_TOKEN;
+  if (!token) throw new Error("BGIPFS_TOKEN not configured");
+
+  const delaysMs = [0, 750, 2000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < delaysMs.length; attempt++) {
+    if (delaysMs[attempt] > 0) await new Promise(r => setTimeout(r, delaysMs[attempt]));
+    try {
+      return await bgipfsAddBytesOnce(bytes, filename, contentType, token);
+    } catch (err) {
+      lastErr = err;
+      const status = (err as { status?: number }).status;
+      // Auth / bad payload — stop early, don't burn the clock.
+      if (typeof status === "number" && status >= 400 && status < 500) throw err;
+      console.warn(`[BGIPFS] ${filename} attempt ${attempt + 1}/${delaysMs.length} failed:`, (err as Error).message);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("BGIPFS upload failed");
 }
 
 export async function bgipfsAddJson(obj: unknown, filename: string): Promise<BgipfsUploadResult> {

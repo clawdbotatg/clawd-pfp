@@ -1,5 +1,4 @@
 import { Fraunces, Inter } from "next/font/google";
-import "@rainbow-me/rainbowkit/styles.css";
 import "@scaffold-ui/components/styles.css";
 import { ScaffoldEthAppWithProviders } from "~~/components/ScaffoldEthAppWithProviders";
 import { ThemeProvider } from "~~/components/ThemeProvider";
